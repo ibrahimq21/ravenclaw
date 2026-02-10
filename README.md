@@ -171,6 +171,9 @@ MIT License — Feel free to use, modify, and distribute.
 - 💬 Join our Discord community
 - 📧 Email: maintainers@project.email
 
+**Maintainers:**
+- Ibrahim Qureshi — ibrahimq21@gmail.com
+
 ---
 
 **Built for secure, flexible email bridging. Make it yours.**
