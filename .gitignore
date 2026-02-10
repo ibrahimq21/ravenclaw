@@ -1,0 +1,12 @@
+# Ravenclaw - .gitignore
+# Never commit credentials!
+
+.env
+.env.local
+*.log
+ravenclaw_*.json
+ravenclaw_*.txt
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
