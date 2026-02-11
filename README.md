@@ -15,6 +15,7 @@ Ravenclaw is an open-source email bridge that connects your inbox to messaging p
 - ⏰ **Scheduled Checks** — Configurable polling interval (default: 30 min)
 - 📁 **JSON Storage** — All emails stored in readable JSON format
 - 🤖 **Auto-Reply** — Automatic acknowledgment responses
+- 🛡️ **Stability** — Memory leak prevention, log rotation, graceful shutdown
 
 ---
 
@@ -81,6 +82,19 @@ BRIDGE_POLL_INTERVAL=30
 | `/send` | POST | Send email reply |
 | `/check` | POST | Trigger manual email check |
 | `/stats` | GET | Processing statistics |
+| `/mark-read/<id>` | POST | Mark email as read |
+
+---
+
+## Stability & Memory Management
+
+Ravenclaw includes enterprise-grade stability features:
+
+- **Inbox Limits** — Maximum 1000 emails stored (prevents JSON bloat)
+- **Log Rotation** — 1MB log files with 5 backups (prevents disk full)
+- **State Trimming** — Sync state limited to 500 msg IDs
+- **Graceful Shutdown** — SIGINT/SIGTERM handlers for clean exit
+- **In-Memory Caching** — State cached in sync watcher (reduces I/O)
 
 ---
 
@@ -90,6 +104,7 @@ BRIDGE_POLL_INTERVAL=30
 - ✅ Discord Webhooks
 - ✅ Discord Bot Integration
 - ✅ JSON File Watcher
+- ✅ Stability & Memory Management
 
 **Phase 2 — Community Contributions Welcome**
 - 📌 **Slack** — Channel and user notifications via Bot Token

@@ -11,6 +11,7 @@ Features:
 - Auto-reply capabilities
 - Conversation threading
 - Inbox storage in JSON file
+- Memory leak prevention (max emails, log rotation)
 """
 
 import poplib
@@ -28,6 +29,9 @@ import sys
 import os
 from datetime import datetime
 from flask import Flask, request, jsonify
+import signal
+import atexit
+from logging.handlers import RotatingFileHandler
 
 # ========== CONFIG ==========
 
@@ -88,16 +92,28 @@ AUTO_REPLY = {
         "Thank you for your email. I've received your message and will respond shortly.\n\n- Enoth")
 }
 
-# Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [RAVENCLAW] %(message)s',
-    handlers=[
-        logging.FileHandler('ravenclaw.log', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
+# Memory leak prevention
+MAX_EMAILS = 1000  # Keep last 1000 emails max
+MAX_LOG_SIZE = 1024 * 1024  # 1MB
+MAX_LOG_BACKUPS = 5
+
+# Global shutdown flag
+shutdown_requested = False
+
+# Logging with rotation
+logger = logging.getLogger('ravenclaw')
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s [RAVENCLAW] %(message)s')
+
+# File handler with rotation
+file_handler = RotatingFileHandler('ravenclaw.log', maxBytes=MAX_LOG_SIZE, backupCount=MAX_LOG_BACKUPS, encoding='utf-8')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# Console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 # ========== FLASK APP ==========
 
@@ -147,7 +163,12 @@ def load_inbox():
         return {'emails': []}
 
 def save_inbox(inbox):
-    """Save inbox to JSON file"""
+    """Save inbox to JSON file with max emails limit"""
+    # Trim to max emails to prevent memory leak
+    if 'emails' in inbox and len(inbox['emails']) > MAX_EMAILS:
+        inbox['emails'] = inbox['emails'][:MAX_EMAILS]
+        logger.info(f"Trimmed inbox to {MAX_EMAILS} emails")
+    
     with open(INBOX_FILE, 'w', encoding='utf-8') as f:
         json.dump(inbox, f, indent=2, ensure_ascii=False)
 
@@ -221,6 +242,10 @@ def send_smtp(to, subject, body, in_reply_to=None):
 
 def check_inbox():
     """Main email check function - reads emails and saves to JSON"""
+    if shutdown_requested:
+        logger.info("Shutdown requested, skipping inbox check")
+        return
+    
     logger.info("Checking inbox...")
     
     processed_ids = load_processed()
@@ -282,7 +307,7 @@ def check_inbox():
             except Exception as e:
                 logger.error(f"Error processing msg {msg_num}: {e}")
         
-        # Save updated inbox
+        # Save updated inbox (with trim)
         if new_emails:
             save_inbox(inbox)
             
@@ -401,11 +426,28 @@ def mark_read(msg_id):
 
 # ========== MAIN ==========
 
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    global shutdown_requested
+    logger.info(f"Received signal {signum}, shutting down...")
+    shutdown_requested = True
+
+def cleanup():
+    """Cleanup on exit"""
+    logger.info("Ravenclaw shutting down...")
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+atexit.register(cleanup)
+
 def run_scheduler():
-    """Background scheduler"""
-    while True:
+    """Background scheduler with shutdown support"""
+    while not shutdown_requested:
         check_inbox()
-        time.sleep(BRIDGE['poll_interval'] * 60)
+        if not shutdown_requested:
+            time.sleep(BRIDGE['poll_interval'] * 60)
+    logger.info("Scheduler stopped")
 
 if __name__ == '__main__':
     print("=" * 50)
@@ -415,6 +457,7 @@ if __name__ == '__main__':
     print(f"Domains: {', '.join(ALLOWED_DOMAINS)}")
     print(f"Check every: {BRIDGE['poll_interval']} minutes")
     print(f"Inbox file: {INBOX_FILE}")
+    print(f"Max emails: {MAX_EMAILS}")
     print("=" * 50)
     
     # Start Flask in background
@@ -426,3 +469,4 @@ if __name__ == '__main__':
     
     # Main scheduler
     run_scheduler()
+    logger.info("Ravenclaw stopped gracefully")
