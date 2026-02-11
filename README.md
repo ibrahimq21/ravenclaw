@@ -6,6 +6,12 @@ Ravenclaw is an open-source email bridge that connects your inbox to messaging p
 
 ---
 
+## Logo
+
+![Ravenclaw Logo](./assets/ravenclaw-placeholder.svg)
+
+---
+
 ## Features
 
 - 📥 **POP3 Email Fetching** — Securely fetch emails from any POP3 server

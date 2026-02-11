@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Background -->
+  <rect width="256" height="256" fill="#0a0a1a"/>
+  
+  <!-- Pixel-style Raven Shape (simplified) -->
+  <g fill="none" stroke-width="2">
+    <!-- Raven body outline -->
+    <path d="M64 80 L64 160 L192 160 L192 80 L160 40 L96 40 Z" fill="#1a1a2e" stroke="#5c7cfa"/>
+    
+    <!-- Raven wings (Eagle/Bird style) -->
+    <path d="M64 80 L32 60 L32 120 L64 140" fill="#2a2a4e" stroke="#5c7cfa"/>
+    <path d="M192 80 L224 60 L224 120 L192 140" fill="#2a2a4e" stroke="#5c7cfa"/>
+    
+    <!-- Raven head -->
+    <circle cx="128" cy="60" r="32" fill="#1a1a2e" stroke="#5c7cfa"/>
+    
+    <!-- Beak -->
+    <polygon points="128,60 128,80 144,70" fill="#e3c025" stroke="#c9a227"/>
+    
+    <!-- Eyes (intelligent Ravenclaw look) -->
+    <circle cx="116" cy="55" r="6" fill="#ffffff"/>
+    <circle cx="140" cy="55" r="6" fill="#ffffff"/>
+    <circle cx="116" cy="55" r="3" fill="#0a0a1a"/>
+    <circle cx="140" cy="55" r="3" fill="#0a0a1a"/>
+    
+    <!-- Ravenclaw colors - Bronze and Blue accent -->
+    <path d="M80 95 L176 95" stroke="#c9a227" stroke-width="4"/>
+    <path d="M88 110 L168 110" stroke="#5c7cfa" stroke-width="4"/>
+    
+    <!-- Envelope (email bridge theme) -->
+    <rect x="96" y="140" width="64" height="40" fill="#f5f5dc" stroke="#c9a227" stroke-width="2"/>
+    <path d="M96 140 L128 165 L160 140" fill="none" stroke="#c9a227" stroke-width="2"/>
+    
+    <!-- Pixel grid effect -->
+    <defs>
+      <pattern id="pixelGrid" width="8" height="8" patternUnits="userSpaceOnUse">
+        <rect width="8" height="8" fill="none" stroke="#5c7cfa" stroke-width="0.5" opacity="0.1"/>
+      </pattern>
+    </defs>
+    <rect width="256" height="256" fill="url(#pixelGrid)"/>
+  </g>
+  
+  <!-- Text label -->
+  <text x="128" y="220" text-anchor="middle" font-family="monospace" font-size="16" fill="#5c7cfa">RAVENCLAW</text>
+  
+  <!-- Placeholder note -->
+  <text x="128" y="242" text-anchor="middle" font-family="monospace" font-size="10" fill="#888888">Replace with pixel art</text>
+</svg>
