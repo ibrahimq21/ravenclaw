@@ -63,7 +63,7 @@ EMAIL_USERNAME=your@email.com
 EMAIL_PASSWORD=yourpassword
 
 # Security
-DOMAIN_FILTER=sapphire.co,allowed-domain.com
+DOMAIN_FILTER=example.com,allowed-domain.com
 
 # Discord Webhook
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...

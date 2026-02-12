@@ -60,7 +60,7 @@ def get_env(key, required=False, default=None):
 
 # Email settings
 EMAIL = {
-    'host': get_env('EMAIL_HOST', False, 'mail.sapphire.co'),
+    'host': get_env('EMAIL_HOST', False, 'mail.example.com'),
     'pop_port': int(get_env('EMAIL_POP_PORT', False, '995')),
     'smtp_port': int(get_env('EMAIL_SMTP_PORT', False, '587')),
     'username': get_env('EMAIL_USERNAME', True),
@@ -68,7 +68,7 @@ EMAIL = {
 }
 
 # Domain filter
-DOMAIN_FILTER = get_env('DOMAIN_FILTER', False, 'sapphire.co')
+DOMAIN_FILTER = get_env('DOMAIN_FILTER', False, 'example.com')
 ALLOWED_DOMAINS = [d.strip() for d in DOMAIN_FILTER.split(',')]
 
 # Discord settings
