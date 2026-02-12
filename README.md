@@ -31,15 +31,7 @@ Receive email notifications directly in your Discord server. Perfect for:
 
 ![Ravenclaw Logo](./assets/ravenclaw-placeholder.svg)
 
----
 
-## Demo Video
-
-🎥 **Watch the Demo:** [Ravenclaw Email Bridge Demo](https://youtube.com/watch?v=YOUR_VIDEO_ID)
-
-📝 **Behind the Scenes:** [YouTube Recording Plan](./YOUTUBE_DEMO_PLAN.md) — Script, equipment checklist, and production guide
-
----
 
 ## Why Ravenclaw?
 
