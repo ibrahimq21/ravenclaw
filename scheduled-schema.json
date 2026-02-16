@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "description": "Scheduled email queue for Ravenclaw",
+  "schema": {
+    "email": {
+      "to": "recipient@domain.com",
+      "subject": "Email subject",
+      "body": "Email body content",
+      "created_at": "ISO-8601 timestamp when created",
+      "target_time": "ISO-8601 timestamp when to send",
+      "status": "pending|sent|failed|cancelled",
+      "attempts": 0,
+      "last_attempt": null,
+      "error": null,
+      "priority": "normal|high|low"
+    }
+  },
+  "notes": {
+    "timezone": "All timestamps are in UTC or include timezone offset",
+    "retries": "Failed emails will be retried 3 times before marking as failed",
+    "cleanup": "Sent emails are removed after 7 days"
+  }
+}

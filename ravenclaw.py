@@ -6,6 +6,7 @@ Features:
 - POP3 email fetching with domain filtering
 - Discord webhook integration
 - SMTP email sending
+- Scheduled emails with JSON queue
 - Scheduled checks every 30 minutes
 - Secure credential management via .env
 - Auto-reply capabilities
@@ -90,6 +91,13 @@ AUTO_REPLY = {
     'enabled': get_env('AUTO_REPLY_ENABLED', False, 'false').lower() == 'true',
     'template': get_env('AUTO_REPLY_TEMPLATE', False, 
         "Thank you for your email. I've received your message and will respond shortly.\n\n- Enoth")
+}
+
+# Scheduled email settings
+SCHEDULED = {
+    'queue_file': 'ravenclaw_scheduled.json',
+    'max_attempts': 3,
+    'check_interval': 60  # seconds
 }
 
 # Memory leak prevention
@@ -185,6 +193,98 @@ def save_processed(msg_id):
     with open(PROCESSED_FILE, 'a') as f:
         f.write(msg_id + '\n')
 
+# ========== SCHEDULED EMAIL FUNCTIONS ==========
+
+def load_scheduled_queue():
+    """Load scheduled email queue from JSON file"""
+    try:
+        with open(SCHEDULED['queue_file'], 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            # Filter out old sent emails (older than 7 days)
+            cutoff = datetime.now().timestamp() - (7 * 24 * 60 * 60)
+            data['emails'] = [e for e in data.get('emails', []) 
+                             if e.get('status') != 'sent' or 
+                             (e.get('status') == 'sent' and 
+                              datetime.fromisoformat(e.get('sent_at', '2000-01-01')).timestamp() > cutoff)]
+            return data
+    except:
+        return {'version': '1.0', 'emails': []}
+
+def save_scheduled_queue(queue):
+    """Save scheduled email queue to JSON file"""
+    with open(SCHEDULED['queue_file'], 'w', encoding='utf-8') as f:
+        json.dump(queue, f, indent=2, ensure_ascii=False)
+
+def send_smtp(to, subject, body, in_reply_to=None):
+    """Send email via SMTP"""
+    msg = MIMEMultipart()
+    msg['Subject'] = subject
+    msg['From'] = f"Enoth <{EMAIL['username']}>"
+    msg['To'] = to
+    if in_reply_to:
+        msg['In-Reply-To'] = in_reply_to
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+    
+    try:
+        with smtplib.SMTP(EMAIL['host'], EMAIL['smtp_port']) as server:
+            server.starttls()
+            server.login(EMAIL['username'], EMAIL['password'])
+            server.send_message(msg)
+        logger.info(f"Sent SMTP: {to}")
+        return True
+    except Exception as e:
+        logger.error(f"SMTP error: {e}")
+        return False
+
+def check_and_send_scheduled():
+    """Check scheduled emails and send those ready"""
+    if shutdown_requested:
+        return
+    
+    queue = load_scheduled_queue()
+    now = datetime.now().isoformat()
+    now_ts = datetime.now().timestamp()
+    
+    updated = False
+    
+    for email_entry in queue.get('emails', []):
+        if email_entry.get('status') != 'pending':
+            continue
+        
+        # Check if it's time to send
+        try:
+            target_time = datetime.fromisoformat(email_entry.get('target_time'))
+            if target_time.timestamp() <= now_ts:
+                # Try to send
+                success = send_smtp(
+                    email_entry['to'],
+                    email_entry['subject'],
+                    email_entry['body']
+                )
+                
+                if success:
+                    email_entry['status'] = 'sent'
+                    email_entry['sent_at'] = now
+                    logger.info(f"Scheduled email sent: {email_entry['to']}")
+                else:
+                    email_entry['attempts'] = email_entry.get('attempts', 0) + 1
+                    email_entry['last_attempt'] = now
+                    
+                    if email_entry['attempts'] >= SCHEDULED['max_attempts']:
+                        email_entry['status'] = 'failed'
+                        email_entry['error'] = 'Max attempts reached'
+                        logger.error(f"Scheduled email failed: {email_entry['to']}")
+                
+                updated = True
+                
+        except Exception as e:
+            logger.error(f"Error processing scheduled email: {e}")
+    
+    if updated:
+        save_scheduled_queue(queue)
+
+# ========== DISCORD/EMAIL FUNCTIONS ==========
+
 def send_discord(sender, subject, body, msg_id):
     """Forward email to Discord"""
     content = f"""**New Email**
@@ -216,26 +316,6 @@ ID: {msg_id}
         logger.info(f"OpenClaw: {sender}")
         return True
     except:
-        return False
-
-def send_smtp(to, subject, body, in_reply_to=None):
-    """Send email via SMTP"""
-    msg = MIMEMultipart()
-    msg['Subject'] = f"Re: {subject}"
-    msg['From'] = f"Enoth <{EMAIL['username']}>"
-    msg['To'] = to
-    msg['In-Reply-To'] = in_reply_to if in_reply_to else ""
-    msg.attach(MIMEText(body, 'plain', 'utf-8'))
-    
-    try:
-        with smtplib.SMTP(EMAIL['host'], EMAIL['smtp_port']) as server:
-            server.starttls()
-            server.login(EMAIL['username'], EMAIL['password'])
-            server.send_message(msg)
-        logger.info(f"Sent: {to}")
-        return True
-    except Exception as e:
-        logger.error(f"SMTP error: {e}")
         return False
 
 # ========== EMAIL PROCESSING ==========
@@ -395,10 +475,99 @@ def send_email():
     success = send_smtp(data['to'], data['subject'], data['body'], data.get('in_reply_to'))
     return jsonify({'status': 'sent' if success else 'failed'})
 
+# ========== SCHEDULED EMAIL ROUTES ==========
+
+@app.route('/schedule', methods=['POST'])
+def schedule_email():
+    """
+    Schedule an email to be sent later.
+    Body:
+    {
+        "to": "recipient@domain.com",
+        "subject": "Email subject",
+        "body": "Email body",
+        "target_time": "2026-02-17T09:00:00"  # ISO-8601 timestamp
+    }
+    """
+    data = request.json
+    required = ['to', 'subject', 'body', 'target_time']
+    for r in required:
+        if r not in data:
+            return jsonify({'error': f'Missing: {r}'}), 400
+    
+    # Validate target_time format
+    try:
+        target = datetime.fromisoformat(data['target_time'])
+        if target.timestamp() <= datetime.now().timestamp():
+            return jsonify({'error': 'target_time must be in the future'}), 400
+    except ValueError:
+        return jsonify({'error': 'Invalid target_time format. Use ISO-8601 (e.g., 2026-02-17T09:00:00)'}), 400
+    
+    if not is_allowed(data['to']):
+        return jsonify({'error': 'Domain not allowed'}), 403
+    
+    # Load queue and add email
+    queue = load_scheduled_queue()
+    
+    email_entry = {
+        'id': f"sched_{datetime.now().strftime('%Y%m%d%H%M%S')}_{len(queue.get('emails', []))}",
+        'to': data['to'],
+        'subject': data['subject'],
+        'body': data['body'],
+        'target_time': data['target_time'],
+        'created_at': datetime.now().isoformat(),
+        'status': 'pending',
+        'attempts': 0,
+        'last_attempt': None,
+        'error': None,
+        'priority': data.get('priority', 'normal')
+    }
+    
+    queue['emails'].append(email_entry)
+    save_scheduled_queue(queue)
+    
+    logger.info(f"Scheduled email: {data['to']} for {data['target_time']}")
+    
+    return jsonify({
+        'status': 'scheduled',
+        'id': email_entry['id'],
+        'target_time': data['target_time']
+    })
+
+@app.route('/schedule/list')
+def list_scheduled():
+    """List all scheduled emails"""
+    queue = load_scheduled_queue()
+    pending = [e for e in queue.get('emails', []) if e.get('status') == 'pending']
+    return jsonify({
+        'total': len(queue.get('emails', [])),
+        'pending': len(pending),
+        'emails': pending
+    })
+
+@app.route('/schedule/cancel/<email_id>', methods=['POST'])
+def cancel_scheduled(email_id):
+    """Cancel a scheduled email"""
+    queue = load_scheduled_queue()
+    
+    for email_entry in queue.get('emails', []):
+        if email_entry.get('id') == email_id and email_entry.get('status') == 'pending':
+            email_entry['status'] = 'cancelled'
+            save_scheduled_queue(queue)
+            return jsonify({'status': 'cancelled', 'id': email_id})
+    
+    return jsonify({'error': 'Scheduled email not found or already sent'}), 404
+
 @app.route('/check', methods=['POST'])
 def trigger_check():
     """Trigger manual email check"""
     threading.Thread(target=check_inbox).start()
+    return jsonify({'status': 'checking'})
+
+@app.route('/check-scheduled', methods=['POST'])
+def trigger_scheduled_check():
+    """Trigger manual check of scheduled emails"""
+    threading.Thread(target=check_and_send_scheduled).start()
     return jsonify({'status': 'checking'})
 
 @app.route('/stats')
@@ -407,10 +576,16 @@ def stats():
     inbox = load_inbox()
     emails = inbox.get('emails', [])
     unread = len([e for e in emails if not e.get('read', False)])
+    
+    queue = load_scheduled_queue()
+    pending = len([e for e in queue.get('emails', []) if e.get('status') == 'pending'])
+    
     return jsonify({
         'total': len(emails),
         'unread': unread,
-        'domains': ALLOWED_DOMAINS
+        'domains': ALLOWED_DOMAINS,
+        'scheduled_pending': pending,
+        'scheduled_total': len(queue.get('emails', []))
     })
 
 @app.route('/mark-read/<msg_id>', methods=['POST'])
@@ -444,10 +619,25 @@ atexit.register(cleanup)
 def run_scheduler():
     """Background scheduler with shutdown support"""
     while not shutdown_requested:
-        check_inbox()
+        try:
+            check_inbox()
+            check_and_send_scheduled()
+        except Exception as e:
+            logger.error(f"Scheduler error: {e}")
+        
         if not shutdown_requested:
             time.sleep(BRIDGE['poll_interval'] * 60)
-    logger.info("Scheduler stopped")
+
+def run_scheduled_checker():
+    """Background checker for scheduled emails (more frequent)"""
+    while not shutdown_requested:
+        try:
+            check_and_send_scheduled()
+        except Exception as e:
+            logger.error(f"Scheduled checker error: {e}")
+        
+        if not shutdown_requested:
+            time.sleep(SCHEDULED['check_interval'])
 
 if __name__ == '__main__':
     print("=" * 50)
@@ -458,6 +648,7 @@ if __name__ == '__main__':
     print(f"Check every: {BRIDGE['poll_interval']} minutes")
     print(f"Inbox file: {INBOX_FILE}")
     print(f"Max emails: {MAX_EMAILS}")
+    print(f"Scheduled emails: {SCHEDULED['queue_file']}")
     print("=" * 50)
     
     # Start Flask in background
@@ -467,6 +658,10 @@ if __name__ == '__main__':
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
-    # Main scheduler
+    # Start scheduled email checker in background
+    scheduled_thread = threading.Thread(target=run_scheduled_checker, daemon=True)
+    scheduled_thread.start()
+    
+    # Main scheduler for inbox
     run_scheduler()
     logger.info("Ravenclaw stopped gracefully")

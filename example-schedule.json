@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "Example scheduled emails template",
+  "notes": {
+    "usage": "Copy this file to ravenclaw_scheduled.json and add your emails",
+    "important": "DO NOT delete this file - it's a template",
+    "note": "Use /schedule API endpoint to add emails programmatically"
+  },
+  "examples": [
+    {
+      "to": "recipient@domain.com",
+      "subject": "Leave Request - Example",
+      "body": "Dear Name,\n\nI would like to request leave from DATE to DATE.\n\nReason: Your reason here.\n\nKind Regards,\nYour Name",
+      "target_time": "2026-12-31T09:00:00",
+      "priority": "normal"
+    },
+    {
+      "to": "manager@company.com",
+      "subject": "Meeting Request",
+      "body": "Hi,\n\nI would like to schedule a meeting to discuss TOPIC.\n\nAvailable times:\n- Option 1: DATE TIME\n- Option 2: DATE TIME\n\nBest regards",
+      "target_time": "2026-12-31T10:00:00",
+      "priority": "high"
+    }
+  ],
+  "schema": {
+    "email": {
+      "id": "unique_id_generated_automatically",
+      "to": "recipient@domain.com",
+      "subject": "Email subject",
+      "body": "Email body content",
+      "target_time": "ISO-8601 timestamp (e.g., 2026-12-31T09:00:00)",
+      "created_at": "auto-generated",
+      "status": "pending|sent|failed|cancelled",
+      "attempts": 0,
+      "last_attempt": null,
+      "error": null,
+      "priority": "normal|high|low"
+    }
+  },
+  "tips": {
+    "timezone": "Use ISO-8601 format with timezone offset or UTC",
+    "future_only": "target_time must be in the future",
+    "priority": "high priority emails are retried more aggressively"
+  }
+}
