@@ -71,6 +71,8 @@ Receive email notifications directly in your Discord server. Perfect for:
 - 📁 **JSON Storage** — All emails stored in readable JSON format
 - 🤖 **Auto-Reply** — Automatic acknowledgment responses
 - 🛡️ **Stability** — Memory leak prevention, log rotation, graceful shutdown
+- ⏰ **Scheduled Emails** — Schedule emails to be sent at specific times via JSON queue
+- 📋 **Scheduled Email Templates** — `example-schedule.json` provides templates for scheduling emails
 
 ---
 
@@ -127,6 +129,58 @@ BRIDGE_POLL_INTERVAL=30
 
 ---
 
+## Scheduled Emails
+
+Schedule emails to be sent at specific times using the API or JSON queue.
+
+### Quick Schedule via API
+
+```bash
+curl -X POST http://localhost:5002/schedule \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "recipient@domain.com",
+    "subject": "Leave Request",
+    "body": "Dear Manager,\n\nI would like to request leave...",
+    "target_time": "2026-02-20T09:00:00",
+    "priority": "high"
+  }'
+```
+
+### Using JSON Queue
+
+Copy `example-schedule.json` to `ravenclaw_scheduled.json` and add your emails:
+
+```bash
+cp example-schedule.json ravenclaw_scheduled.json
+# Edit ravenclaw_scheduled.json with your email content
+```
+
+### Scheduled Email Schema
+
+```json
+{
+  "version": "1.0",
+  "emails": [
+    {
+      "id": "unique_id",
+      "to": "recipient@domain.com",
+      "subject": "Email subject",
+      "body": "Email body content",
+      "target_time": "2026-12-31T09:00:00",
+      "created_at": "auto-generated",
+      "status": "pending|sent|failed|cancelled",
+      "attempts": 0,
+      "priority": "normal|high|low"
+    }
+  ]
+}
+```
+
+**Note:** `ravenclaw_scheduled.json` stores your actual scheduled emails. Use `example-schedule.json` as a template.
+
+---
+
 ## API Endpoints
 
 | Endpoint | Method | Description |
@@ -140,6 +194,10 @@ BRIDGE_POLL_INTERVAL=30
 | `/check` | POST | Trigger manual email check |
 | `/stats` | GET | Processing statistics |
 | `/mark-read/<id>` | POST | Mark email as read |
+| `/schedule` | POST | Schedule an email to be sent later |
+| `/schedule/list` | GET | List all scheduled emails |
+| `/schedule/cancel/<id>` | POST | Cancel a scheduled email |
+| `/check-scheduled` | POST | Trigger manual scheduled email check |
 
 ---
 
