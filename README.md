@@ -12,6 +12,11 @@ Ravenclaw is an open-source **email-to-Discord bridge** that connects your inbox
 **Keywords:** email bridge, discord webhook, pop3 email, smtp, email notification, email forwarder, discord bot, python automation, self-hosted, email alerts, discord notifications
 
 ---
+# Openclaw Skill Repository
+https://github.com/ibrahimq21/openclaw-skill-ravenclaw.git
+
+---
+
 
 ## What Ravenclaw Does
 
