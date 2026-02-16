@@ -96,6 +96,7 @@ AUTO_REPLY = {
 # Scheduled email settings
 SCHEDULED = {
     'queue_file': 'ravenclaw_scheduled.json',
+    'sent_file': 'ravenclaw_sent.json',  # Track sent emails across restarts
     'max_attempts': 3,
     'check_interval': 60  # seconds
 }
@@ -200,6 +201,15 @@ def load_scheduled_queue():
     try:
         with open(SCHEDULED['queue_file'], 'r', encoding='utf-8') as f:
             data = json.load(f)
+            
+            # Sync with persistent sent IDs to ensure no re-sending
+            sent_ids = load_sent_ids()
+            for email_entry in data.get('emails', []):
+                if email_entry.get('id') in sent_ids:
+                    email_entry['status'] = 'sent'
+                    if not email_entry.get('sent_at'):
+                        email_entry['sent_at'] = datetime.now().isoformat()
+            
             # Filter out old sent emails (older than 7 days)
             cutoff = datetime.now().timestamp() - (7 * 24 * 60 * 60)
             data['emails'] = [e for e in data.get('emails', []) 
@@ -214,6 +224,20 @@ def save_scheduled_queue(queue):
     """Save scheduled email queue to JSON file"""
     with open(SCHEDULED['queue_file'], 'w', encoding='utf-8') as f:
         json.dump(queue, f, indent=2, ensure_ascii=False)
+
+def load_sent_ids():
+    """Load IDs of already-sent emails"""
+    try:
+        with open(SCHEDULED['sent_file'], 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return set(data.get('sent_ids', []))
+    except:
+        return set()
+
+def save_sent_ids(sent_ids):
+    """Save sent email IDs to persistent file"""
+    with open(SCHEDULED['sent_file'], 'w', encoding='utf-8') as f:
+        json.dump({'sent_ids': list(sent_ids)}, f, indent=2)
 
 def send_smtp(to, subject, body, in_reply_to=None):
     """Send email via SMTP"""
@@ -245,10 +269,19 @@ def check_and_send_scheduled():
     now = datetime.now().isoformat()
     now_ts = datetime.now().timestamp()
     
+    # Load persistent sent IDs to prevent re-sending across restarts
+    sent_ids = load_sent_ids()
+    
     updated = False
     
     for email_entry in queue.get('emails', []):
-        if email_entry.get('status') != 'pending':
+        email_id = email_entry.get('id')
+        
+        # Skip if already sent (persistent check)
+        if email_id in sent_ids:
+            continue
+        
+        if email_entry.get('status') == 'sent':
             continue
         
         # Check if it's time to send
@@ -265,7 +298,9 @@ def check_and_send_scheduled():
                 if success:
                     email_entry['status'] = 'sent'
                     email_entry['sent_at'] = now
-                    logger.info(f"Scheduled email sent: {email_entry['to']}")
+                    sent_ids.add(email_id)  # Track persistently
+                    save_sent_ids(sent_ids)  # Save immediately
+                    logger.info(f"Scheduled email sent: {email_entry['to']} ({email_id})")
                 else:
                     email_entry['attempts'] = email_entry.get('attempts', 0) + 1
                     email_entry['last_attempt'] = now
