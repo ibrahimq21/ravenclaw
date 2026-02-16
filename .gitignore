@@ -4,9 +4,19 @@
 .env
 .env.local
 *.log
-ravenclaw_*.json
-ravenclaw_*.txt
+ravenclaw_*.json        # Excludes: inbox, scheduled, sent, processed, rejected
+ravenclaw_*.txt        # Excludes: processed IDs
 __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
