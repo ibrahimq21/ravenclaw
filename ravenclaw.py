@@ -65,7 +65,8 @@ EMAIL = {
     'pop_port': int(get_env('EMAIL_POP_PORT', False, '995')),
     'smtp_port': int(get_env('EMAIL_SMTP_PORT', False, '587')),
     'username': get_env('EMAIL_USERNAME', True),
-    'password': get_env('EMAIL_PASSWORD', True)
+    'password': get_env('EMAIL_PASSWORD', True),
+    'sender_name': get_env('SENDER_NAME', False, 'Ibrahim Qureshi')
 }
 
 # Domain filter
@@ -239,12 +240,19 @@ def save_sent_ids(sent_ids):
     with open(SCHEDULED['sent_file'], 'w', encoding='utf-8') as f:
         json.dump({'sent_ids': list(sent_ids)}, f, indent=2)
 
-def send_smtp(to, subject, body, in_reply_to=None):
-    """Send email via SMTP"""
+def send_smtp(to, subject, body, in_reply_to=None, cc=None, bcc=None):
+    """Send email via SMTP with optional CC and BCC support"""
     msg = MIMEMultipart()
     msg['Subject'] = subject
-    msg['From'] = f"Enoth <{EMAIL['username']}>"
+    msg['From'] = f"{EMAIL['sender_name']} <{EMAIL['username']}>"
     msg['To'] = to
+    
+    # Add CC recipients if provided
+    if cc:
+        if isinstance(cc, str):
+            cc = [cc]
+        msg['Cc'] = ', '.join(cc)
+    
     if in_reply_to:
         msg['In-Reply-To'] = in_reply_to
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
@@ -253,8 +261,19 @@ def send_smtp(to, subject, body, in_reply_to=None):
         with smtplib.SMTP(EMAIL['host'], EMAIL['smtp_port']) as server:
             server.starttls()
             server.login(EMAIL['username'], EMAIL['password'])
-            server.send_message(msg)
-        logger.info(f"Sent SMTP: {to}")
+            
+            # Build recipient list: To + CC + BCC
+            recipients = [to]
+            if cc:
+                recipients.extend(cc)
+            if bcc:
+                if isinstance(bcc, str):
+                    bcc = [bcc]
+                recipients.extend(bcc)
+            
+            # Use sendmail for proper CC/BCC handling
+            server.sendmail(EMAIL['username'], recipients, msg.as_string())
+        logger.info(f"Sent SMTP: {to}" + (f", CC: {cc}" if cc else "") + (f", BCC: {bcc}" if bcc else ""))
         return True
     except Exception as e:
         logger.error(f"SMTP error: {e}")
@@ -292,7 +311,9 @@ def check_and_send_scheduled():
                 success = send_smtp(
                     email_entry['to'],
                     email_entry['subject'],
-                    email_entry['body']
+                    email_entry['body'],
+                    cc=email_entry.get('cc'),
+                    bcc=email_entry.get('bcc')
                 )
                 
                 if success:
@@ -507,7 +528,14 @@ def send_email():
     if not is_allowed(data['to']):
         return jsonify({'error': 'Domain not allowed'}), 403
     
-    success = send_smtp(data['to'], data['subject'], data['body'], data.get('in_reply_to'))
+    success = send_smtp(
+        data['to'], 
+        data['subject'], 
+        data['body'], 
+        data.get('in_reply_to'),
+        data.get('cc'),
+        data.get('bcc')
+    )
     return jsonify({'status': 'sent' if success else 'failed'})
 
 # ========== SCHEDULED EMAIL ROUTES ==========
@@ -519,9 +547,11 @@ def schedule_email():
     Body:
     {
         "to": "recipient@domain.com",
+        "cc": ["cc@domain.com"],        // Optional: CC recipients
+        "bcc": ["bcc@domain.com"],     // Optional: BCC recipients (not in headers)
         "subject": "Email subject",
         "body": "Email body",
-        "target_time": "2026-02-17T09:00:00"  # ISO-8601 timestamp
+        "target_time": "2026-02-17T09:00:00"  // ISO-8601 timestamp
     }
     """
     data = request.json
@@ -547,6 +577,8 @@ def schedule_email():
     email_entry = {
         'id': f"sched_{datetime.now().strftime('%Y%m%d%H%M%S')}_{len(queue.get('emails', []))}",
         'to': data['to'],
+        'cc': data.get('cc'),  # Optional CC recipients
+        'bcc': data.get('bcc'),  # Optional BCC recipients
         'subject': data['subject'],
         'body': data['body'],
         'target_time': data['target_time'],
