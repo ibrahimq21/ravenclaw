@@ -240,9 +240,14 @@ def save_sent_ids(sent_ids):
     with open(SCHEDULED['sent_file'], 'w', encoding='utf-8') as f:
         json.dump({'sent_ids': list(sent_ids)}, f, indent=2)
 
-def send_smtp(to, subject, body, in_reply_to=None, cc=None, bcc=None):
-    """Send email via SMTP with optional CC and BCC support"""
+def send_smtp(to, subject, body, in_reply_to=None, cc=None, bcc=None, references=None):
+    """Send email via SMTP with optional CC, BCC and reply threading support"""
     msg = MIMEMultipart()
+    
+    # Add "Re: " prefix if not already present
+    if subject and not subject.lower().startswith('re:'):
+        subject = f"Re: {subject}"
+    
     msg['Subject'] = subject
     msg['From'] = f"{EMAIL['sender_name']} <{EMAIL['username']}>"
     msg['To'] = to
@@ -253,8 +258,15 @@ def send_smtp(to, subject, body, in_reply_to=None, cc=None, bcc=None):
             cc = [cc]
         msg['Cc'] = ', '.join(cc)
     
+    # Add threading headers for replies
     if in_reply_to:
         msg['In-Reply-To'] = in_reply_to
+    if references:
+        msg['References'] = references
+    elif in_reply_to:
+        # If only in_reply_to is provided, use it as references too
+        msg['References'] = in_reply_to
+    
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
     
     try:
@@ -273,7 +285,7 @@ def send_smtp(to, subject, body, in_reply_to=None, cc=None, bcc=None):
             
             # Use sendmail for proper CC/BCC handling
             server.sendmail(EMAIL['username'], recipients, msg.as_string())
-        logger.info(f"Sent SMTP: {to}" + (f", CC: {cc}" if cc else "") + (f", BCC: {bcc}" if bcc else ""))
+        logger.info(f"Sent SMTP: {to}" + (f", CC: {cc}" if cc else "") + (f", BCC: {bcc}" if bcc else "") + (f", Thread: {in_reply_to}" if in_reply_to else ""))
         return True
     except Exception as e:
         logger.error(f"SMTP error: {e}")
@@ -452,11 +464,16 @@ def check_inbox():
                 send_discord(email_data['sender'], email_data['subject'], 
                            email_data['body'], email_data['id'])
                 
-                # Auto-reply
+                # Auto-reply with proper threading
                 if AUTO_REPLY['enabled']:
                     auto_body = AUTO_REPLY['template']
-                    send_smtp(email_data['sender'], email_data['subject'], 
-                             auto_body, email_data['id'])
+                    send_smtp(
+                        email_data['sender'], 
+                        email_data['subject'], 
+                        auto_body, 
+                        in_reply_to=email_data['id'],
+                        references=email_data['id']
+                    )
         
         mail.quit()
         
@@ -534,7 +551,8 @@ def send_email():
         data['body'], 
         data.get('in_reply_to'),
         data.get('cc'),
-        data.get('bcc')
+        data.get('bcc'),
+        data.get('references')
     )
     return jsonify({'status': 'sent' if success else 'failed'})
 
