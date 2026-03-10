@@ -684,6 +684,17 @@ def mark_read(msg_id):
             return jsonify({'status': 'marked', 'id': msg_id})
     return jsonify({'error': 'Email not found'}), 404
 
+@app.route('/mark-all-read', methods=['POST'])
+def mark_all_read():
+    """Mark all emails as read"""
+    inbox = load_inbox()
+    count = 0
+    for email_data in inbox.get('emails', []):
+        email_data['read'] = True
+        count += 1
+    save_inbox(inbox)
+    return jsonify({'status': 'marked_all', 'count': count})
+
 # ========== MAIN ==========
 
 def signal_handler(signum, frame):
