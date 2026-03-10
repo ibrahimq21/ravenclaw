@@ -296,7 +296,7 @@ MIT License — Feel free to use, modify, and distribute.
 
 - 🐛 Report issues on GitHub
 - 💬 Join our Discord community
-- 📧 Email: maintainers@project.email
+- 📧 Email: ibrahimq21@gmail.com
 
 **Maintainers:**
 - Ibrahim Qureshi — ibrahimq21@gmail.com
