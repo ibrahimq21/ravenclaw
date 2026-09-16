@@ -23,6 +23,9 @@ if os.path.exists(ENV_FILE):
 BRIDGE_URL = os.environ.get('BRIDGE_URL', 'http://localhost:5002')
 INTERVAL = int(os.environ.get('BRIDGE_POLL_INTERVAL', '30'))
 
+# Every bridge route except /health requires this header
+AUTH_HEADERS = {'X-API-Key': os.environ.get('RAVENCLAW_API_KEY', '')}
+
 # Logging
 logging.basicConfig(
     level=logging.INFO,
@@ -38,7 +41,7 @@ def check():
     """Check emails"""
     try:
         logger.info("Checking emails...")
-        r = requests.post(f'{BRIDGE_URL}/check', timeout=30)
+        r = requests.post(f'{BRIDGE_URL}/check', headers=AUTH_HEADERS, timeout=30)
         if r.status_code == 200:
             logger.info("Check completed successfully")
         else:

@@ -67,7 +67,12 @@ ID: {msg_id}
         return False
 
     try:
-        requests.post(DISCORD_WEBHOOK_URL, json={'content': content}, timeout=10)
+        # allowed_mentions disables all pings - the email body is
+        # attacker-controlled and must not be able to @everyone the server.
+        requests.post(DISCORD_WEBHOOK_URL, json={
+            'content': content,
+            'allowed_mentions': {'parse': []}
+        }, timeout=10)
         print(f"[DISCORD] {sender} - {subject}")
         return True
     except Exception as e:
