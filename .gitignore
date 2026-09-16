@@ -2,10 +2,38 @@
 # Never commit credentials!
 
 .env
-.env.local
+.env.*
+!.env.example
 *.log
-ravenclaw_*.json        # Excludes: inbox, scheduled, sent, processed, rejected
-ravenclaw_*.txt        # Excludes: processed IDs
+# Runtime data: inbox, outbox, scheduled queue, sent IDs, sync state,
+# processed message IDs.
+# NOTE: git only treats '#' as a comment at the start of a line.
+# Never put a trailing comment on a pattern - it becomes part of the pattern
+# and the rule silently matches nothing.
+#
+# The patterns are extension-free on purpose: anchoring to .json/.txt let
+# derived files like ravenclaw_inbox.json.bak escape and expose real email
+# content. Match the prefix and everything downstream of it.
+ravenclaw_*
+!ravenclaw_sync.py
+# Files staged for attaching, and the blob store backing drafts and the
+# scheduled queue. Both hold real documents - never commit them.
+attachments/
+ravenclaw_attachments/
+
+# Files received on incoming mail, one folder per sender.
+inbox_attachments/
+
+# The received messages themselves, kept whole so they can be served as .eml.
+# Already covered by ravenclaw_* above; spelled out because these are entire
+# emails - headers, bodies and attachments - and the most sensitive thing here.
+ravenclaw_raw/
+
+# Copies and backups of any of the above
+*.bak
+*.orig
+*.tmp
+*.log.*
 __pycache__/
 *.pyc
 .DS_Store
@@ -20,3 +48,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Ad-hoc API dumps (e.g. curl /inbox > inbox_fresh.json). Real email content.
+*_dump.json
+*_fresh.json

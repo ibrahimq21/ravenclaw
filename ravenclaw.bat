@@ -34,11 +34,15 @@ REM Load .env file
 for /f "usebackq tokens=1,* delims==" %%a in (.env) do (
     if "%%a"=="DOMAIN_FILTER" set DOMAIN_FILTER=%%b
     if "%%a"=="BRIDGE_PORT" set BRIDGE_PORT=%%b
+    if "%%a"=="RAVENCLAW_API_KEY" set RAVENCLAW_API_KEY=%%b
 )
 
 REM Set defaults
-if "%DOMAIN_FILTER%"=="" set DOMAIN_FILTER=sapphire.co
+if "%DOMAIN_FILTER%"=="" set DOMAIN_FILTER=example.com
 if "%BRIDGE_PORT%"=="" set BRIDGE_PORT=5002
+
+REM Auth header for every API call except /health
+set AUTH=-H "X-API-Key: %RAVENCLAW_API_KEY%"
 
 REM Display help
 if "%COMMAND%"=="" set COMMAND=help
@@ -70,7 +74,7 @@ if "%COMMAND%"=="help" (
     echo   ravenclaw.log        - Logs
     echo.
     echo ENVIRONMENT VARIABLES (.env):
-    echo   DOMAIN_FILTER        - Allowed domains (default: sapphire.co)
+    echo   DOMAIN_FILTER        - Allowed domains (default: example.com)
     echo   BRIDGE_POLL_INTERVAL - Minutes between checks (default: 30)
     echo.
     echo EXAMPLES:
@@ -81,7 +85,7 @@ if "%COMMAND%"=="help" (
     echo   ravenclaw.bat unread
     echo   ravenclaw.bat status
     echo   ravenclaw.bat stats
-    echo   ravenclaw.bat send user@sapphire.co "Hello" "Test message"
+    echo   ravenclaw.bat send user@example.com "Hello" "Test message"
     echo   ravenclaw.bat help
     echo.
     echo =================================================================
@@ -132,7 +136,7 @@ if "%COMMAND%"=="scheduler" (
 REM Trigger email check
 if "%COMMAND%"=="check" (
     echo [RAVENCLAW] Checking emails...
-    curl -s -X POST http://localhost:%BRIDGE_PORT%/check
+    curl -s %AUTH% -X POST http://localhost:%BRIDGE_PORT%/check
     echo.
     echo [RAVENCLAW] Check triggered.
     exit /b 0
@@ -141,7 +145,7 @@ if "%COMMAND%"=="check" (
 REM View all received emails (JSON)
 if "%COMMAND%"=="inbox" (
     echo [RAVENCLAW] All received emails:
-    curl -s http://localhost:%BRIDGE_PORT%/inbox
+    curl -s %AUTH% http://localhost:%BRIDGE_PORT%/inbox
     echo.
     exit /b 0
 )
@@ -149,7 +153,7 @@ if "%COMMAND%"=="inbox" (
 REM View unread emails
 if "%COMMAND%"=="unread" (
     echo [RAVENCLAW] Unread emails:
-    curl -s http://localhost:%BRIDGE_PORT%/unread
+    curl -s %AUTH% http://localhost:%BRIDGE_PORT%/unread
     echo.
     exit /b 0
 )
@@ -163,7 +167,7 @@ if "%COMMAND%"=="email" (
         exit /b 1
     )
     echo [RAVENCLAW] Email details:
-    curl -s http://localhost:%BRIDGE_PORT%/inbox/%EMAIL_ID%
+    curl -s %AUTH% http://localhost:%BRIDGE_PORT%/inbox/%EMAIL_ID%
     echo.
     exit /b 0
 )
@@ -179,7 +183,7 @@ if "%COMMAND%"=="status" (
 REM View statistics
 if "%COMMAND%"=="stats" (
     echo [RAVENCLAW] Statistics:
-    curl -s http://localhost:%BRIDGE_PORT%/stats
+    curl -s %AUTH% http://localhost:%BRIDGE_PORT%/stats
     echo.
     exit /b 0
 )
@@ -195,7 +199,7 @@ if "%COMMAND%"=="send" (
         exit /b 1
     )
     echo [RAVENCLAW] Sending email to %TO%...
-    curl -s -X POST http://localhost:%BRIDGE_PORT%/send -H "Content-Type: application/json" -d "{\"to\":\"%TO%\",\"subject\":\"%SUBJECT%\",\"body\":\"%BODY%\"}"
+    curl -s %AUTH% -X POST http://localhost:%BRIDGE_PORT%/send -H "Content-Type: application/json" -d "{\"to\":\"%TO%\",\"subject\":\"%SUBJECT%\",\"body\":\"%BODY%\"}"
     echo.
     echo [RAVENCLAW] Email sent.
     exit /b 0

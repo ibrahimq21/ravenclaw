@@ -10,6 +10,7 @@
 #   check         - Trigger manual email check
 #   inbox         - View all received emails (JSON)
 #   unread        - View unread emails
+#   sent          - View record of sent mail (usage: make sent [BY=alice])
 #   email <id>    - View specific email by ID
 #   status        - Check bridge status
 #   stats         - View statistics
@@ -22,7 +23,12 @@
 #   DOMAIN_FILTER       - Comma-separated list of allowed domains
 #   BRIDGE_POLL_INTERVAL - Minutes between email checks (default: 30)
 
-.PHONY: all bridge bot scheduler sync check inbox unread email status stats send clean install help
+.PHONY: all bridge bot scheduler sync check inbox unread sent email status stats send clean install help
+
+# API key for the curl targets, read from .env.
+# Override on the command line with: make inbox RAVENCLAW_API_KEY=xxx
+RAVENCLAW_API_KEY ?= $(shell sed -n 's/^RAVENCLAW_API_KEY=//p' .env 2>/dev/null)
+AUTH := -H "X-API-Key: $(RAVENCLAW_API_KEY)"
 
 # Default target
 all: bridge bot scheduler sync
@@ -50,38 +56,43 @@ sync:
 # Trigger email check
 check:
 	@echo "[RAVENCLAW] Checking emails..."
-	@curl -s -X POST http://localhost:5002/check || echo "Bridge not running"
+	@curl -s $(AUTH) -X POST http://localhost:5002/check || echo "Bridge not running"
 
 # View inbox (all emails)
 inbox:
 	@echo "[RAVENCLAW] All received emails:"
-	@curl -s http://localhost:5002/inbox | python -m json.tool 2>/dev/null || echo "Bridge not running"
+	@curl -s $(AUTH) http://localhost:5002/inbox | python -m json.tool 2>/dev/null || echo "Bridge not running"
 
 # View unread emails
 unread:
 	@echo "[RAVENCLAW] Unread emails:"
-	@curl -s http://localhost:5002/unread | python -m json.tool 2>/dev/null || echo "Bridge not running"
+	@curl -s $(AUTH) http://localhost:5002/unread | python -m json.tool 2>/dev/null || echo "Bridge not running"
+
+# View sent mail record (usage: make sent [BY=alice])
+sent:
+	@echo "[RAVENCLAW] Sent mail:"
+	@curl -s $(AUTH) "http://localhost:5002/sent?sent_by=$(BY)" | python -m json.tool 2>/dev/null || echo "Bridge not running"
 
 # View specific email
 email:
 	@echo "[RAVENCLAW] Email details:"
-	@curl -s http://localhost:5002/inbox/$(id) | python -m json.tool 2>/dev/null || echo "Email not found"
+	@curl -s $(AUTH) http://localhost:5002/inbox/$(id) | python -m json.tool 2>/dev/null || echo "Email not found"
 
 # Check bridge status
 status:
 	@echo "[RAVENCLAW] Bridge status:"
-	@curl -s http://localhost:5002/health 2>/dev/null | python -m json.tool || echo "Bridge offline"
+	@curl -s $(AUTH) http://localhost:5002/health 2>/dev/null | python -m json.tool || echo "Bridge offline"
 
 # View statistics
 stats:
 	@echo "[RAVENCLAW] Statistics:"
-	@curl -s http://localhost:5002/stats 2>/dev/null | python -m json.tool || echo "Bridge offline"
+	@curl -s $(AUTH) http://localhost:5002/stats 2>/dev/null | python -m json.tool || echo "Bridge offline"
 
 # Send an email
 # Usage: make send TO=x SUBJECT=y BODY=z
 send:
 	@echo "[RAVENCLAW] Sending email to $(TO)..."
-	@curl -s -X POST http://localhost:5002/send \
+	@curl -s $(AUTH) -X POST http://localhost:5002/send \
 		-H "Content-Type: application/json" \
 		-d '{"to":"$(TO)","subject":"$(SUBJECT)","body":"$(BODY)"}' || echo "Failed"
 
@@ -116,6 +127,7 @@ help:
 	@echo "  check         Trigger email check"
 	@echo "  inbox         View all received emails"
 	@echo "  unread        View unread emails"
+	@echo "  sent [BY=x]   View record of sent mail"
 	@echo "  email id=xxx  View specific email"
 	@echo "  status        Check bridge status"
 	@echo "  stats         View statistics"
@@ -127,9 +139,11 @@ help:
 	@echo "ENVIRONMENT VARIABLES (.env):"
 	@echo "  DOMAIN_FILTER        - Allowed domains (comma-separated)"
 	@echo "  BRIDGE_POLL_INTERVAL - Minutes between checks (default: 30)"
+	@echo "  RAVENCLAW_API_KEY    - Required by every endpoint except /health"
 	@echo ""
 	@echo "FILES:"
 	@echo "  ravenclaw_inbox.json      - Received emails storage"
+	@echo "  ravenclaw_outbox.json     - Sent mail record (when / by whom)"
 	@echo "  ravenclaw_sync_state.json - Sync tracking state"
 	@echo "  ravenclaw.log             - Bridge logs"
 	@echo ""

@@ -19,9 +19,17 @@ if os.path.exists(ENV_FILE):
 
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
 BRIDGE_URL = os.environ.get('BRIDGE_URL', 'http://localhost:5002')
+RAVENCLAW_API_KEY = os.environ.get('RAVENCLAW_API_KEY', '')
+
+# Every bridge route except /health requires this header
+AUTH_HEADERS = {'X-API-Key': RAVENCLAW_API_KEY}
 
 if not DISCORD_BOT_TOKEN:
     print("[ERROR] DISCORD_BOT_TOKEN not found in .env!")
+    sys.exit(1)
+
+if not RAVENCLAW_API_KEY:
+    print("[ERROR] RAVENCLAW_API_KEY not found in .env - bridge calls will fail!")
     sys.exit(1)
 
 import discord
@@ -41,7 +49,7 @@ async def on_ready():
 @bot.command(name='check', help='Check for new emails')
 async def check(ctx):
     try:
-        requests.post(f'{BRIDGE_URL}/check', timeout=10)
+        requests.post(f'{BRIDGE_URL}/check', headers=AUTH_HEADERS, timeout=10)
         await ctx.send('[OK] Email check triggered!')
     except Exception as e:
         await ctx.send(f'[ERROR] {e}')
@@ -49,13 +57,21 @@ async def check(ctx):
 @bot.command(name='send', help='Send email: !send <to> <subject> <message>')
 async def send(ctx, to: str, subject: str, *, message: str):
     try:
+        # on_behalf_of names the human who typed the command, so the outbox
+        # shows more than "the bot sent it". The Discord message id is unique
+        # per command invocation, so a retry cannot send the email twice.
         r = requests.post(f'{BRIDGE_URL}/send', json={
-            'to': to, 'subject': subject, 'body': message
-        }, timeout=10)
-        if r.status_code == 200:
-            await ctx.send(f'[OK] Sent to {to}')
+            'to': to, 'subject': subject, 'body': message,
+            'on_behalf_of': str(ctx.author)
+        }, headers={**AUTH_HEADERS, 'Idempotency-Key': f'discord:{ctx.message.id}'}, timeout=10)
+
+        data = r.json() if r.content else {}
+        if r.status_code == 200 and data.get('duplicate'):
+            await ctx.send(f"[OK] Already sent to {to} at {data.get('sent_at')} - not sending again")
+        elif r.status_code == 200:
+            await ctx.send(f"[OK] Sent to {to} (id: {data.get('id', '?')[:8]})")
         else:
-            await ctx.send(f'[ERROR] Failed')
+            await ctx.send(f"[ERROR] {data.get('error') or data.get('rejected') or r.status_code}")
     except Exception as e:
         await ctx.send(f'[ERROR] {e}')
 
@@ -71,7 +87,7 @@ async def status(ctx):
 @bot.command(name='stats', help='View email stats')
 async def stats(ctx):
     try:
-        r = requests.get(f'{BRIDGE_URL}/stats', timeout=5)
+        r = requests.get(f'{BRIDGE_URL}/stats', headers=AUTH_HEADERS, timeout=5)
         data = r.json()
         await ctx.send(f"**Email Stats**\nProcessed: {data.get('processed', 0)}\nRejected: {data.get('rejected', 0)}\nDomains: {', '.join(data.get('allowed_domains', []))}")
     except:
@@ -91,7 +107,7 @@ Slash commands also available: /check, /send, /status""")
 @bot.tree.command(name='check', description='Check for new emails')
 async def check_slash(interaction):
     try:
-        requests.post(f'{BRIDGE_URL}/check', timeout=10)
+        requests.post(f'{BRIDGE_URL}/check', headers=AUTH_HEADERS, timeout=10)
         await interaction.response.send_message('[OK] Checked!')
     except:
         await interaction.response.send_message('[ERROR] Bridge offline')
@@ -99,10 +115,20 @@ async def check_slash(interaction):
 @bot.tree.command(name='send', description='Send an email')
 async def send_slash(interaction, to: str, subject: str, message: str):
     try:
-        r = requests.post(f'{BRIDGE_URL}/send', json={'to': to, 'subject': subject, 'body': message}, timeout=10)
-        await interaction.response.send_message(f'[OK] Sent to {to}')
-    except:
-        await interaction.response.send_message('[ERROR] Failed')
+        r = requests.post(f'{BRIDGE_URL}/send', json={
+            'to': to, 'subject': subject, 'body': message,
+            'on_behalf_of': str(interaction.user)
+        }, headers={**AUTH_HEADERS, 'Idempotency-Key': f'discord:{interaction.id}'}, timeout=10)
+
+        data = r.json() if r.content else {}
+        if r.status_code == 200 and data.get('duplicate'):
+            await interaction.response.send_message(f"[OK] Already sent to {to} at {data.get('sent_at')}")
+        elif r.status_code == 200:
+            await interaction.response.send_message(f'[OK] Sent to {to}')
+        else:
+            await interaction.response.send_message(f"[ERROR] {data.get('error') or r.status_code}")
+    except Exception as e:
+        await interaction.response.send_message(f'[ERROR] {e}')
 
 @bot.tree.command(name='status', description='Check bridge status')
 async def status_slash(interaction):
